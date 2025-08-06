@@ -6,12 +6,10 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 
-
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace websocket = beast::websocket;
 namespace net = boost::asio;
-
 
 class listener : public std::enable_shared_from_this<listener> {
 private:
@@ -19,13 +17,10 @@ private:
 	net::ip::tcp::acceptor m_acceptor;
 
 	void do_accept() {
-		auto sock = net::ip::tcp::socket(m_ioc);
-
 		m_acceptor.async_accept(beast::bind_front_handler(&listener::on_accept, shared_from_this()));
 	}
 
 	void on_accept(const boost::system::error_code& error, net::ip::tcp::socket sock) {
-	//void on_accept(const boost::system::error_code& error) {
 		std::cout << "on_accept" << std::endl;
 
 		if (error) {
@@ -36,11 +31,13 @@ private:
 		do_accept();
 	}
 
-public:
+	// create only through listener::create
 	listener(net::io_context &ioc, net::ip::tcp::acceptor &&acc)
 		: m_ioc(ioc), m_acceptor(std::forward<net::ip::tcp::acceptor>(acc))
-	{
-
+	{}
+public:
+	static std::shared_ptr<listener> create(net::io_context &ioc, net::ip::tcp::acceptor &&acc) {
+		return std::make_shared<listener>(listener(ioc, std::forward<net::ip::tcp::acceptor>(acc)));
 	}
 
 	void run() {
@@ -63,7 +60,7 @@ int main() {
 
 	acceptor.listen(backlog);
 
-	std::make_shared<listener>(listener(ioc, std::move(acceptor)))->run();
+	listener::create(ioc, std::move(acceptor))->run();
 
 	ioc.run();
 
