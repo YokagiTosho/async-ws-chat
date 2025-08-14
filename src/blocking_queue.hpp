@@ -57,4 +57,7 @@ public:
 
 };
 
+using MsgBQueue = BQueue<std::string>;
+using MsgBQueuePtr = std::shared_ptr<BQueue<std::string>>;
+
 #endif

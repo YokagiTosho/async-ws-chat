@@ -12,39 +12,70 @@
 #include "session.hpp"
 
 namespace beast = boost::beast;
-namespace http = beast::http;
-namespace websocket = beast::websocket;
 namespace net = boost::asio;
 
 class listener : public std::enable_shared_from_this<listener> {
 private:
 	net::io_context &m_ioc;
 	net::ip::tcp::acceptor m_acceptor;
-
+	size_t m_id {0};
+	sessions_t m_sessions;
+	
 	void do_accept() {
-		m_acceptor.async_accept(beast::bind_front_handler(&listener::on_accept, shared_from_this()));
+		m_acceptor.async_accept(
+				beast::bind_front_handler(
+					&listener::on_accept,
+					shared_from_this()
+					)
+				);
 	}
 
 	void on_accept(const boost::system::error_code& error, net::ip::tcp::socket sock) {
-		std::cout << "on_accept" << std::endl;
-
 		if (error) {
 			std::cerr << "err occured in 'listener::on_accept': " << error.what() << std::endl;
+
+			do_accept();
+
 			return;
 		}
 
-		session::create(std::move(sock))->run();
+		auto s= session::create(
+				m_id,
+				std::move(sock),
+				[this](const std::string &msg) {
+					for (auto &[key, session] : m_sessions) {
+						session->do_write(msg);
+					}
+				});
+				//std::bind(&listener::on_notify_message, this, std::placeholders::_1));
+		s->run();
+
+		m_sessions[m_id] = s;
+		m_id++;
 
 		do_accept();
 	}
 
+	void on_notify_message(const std::string &msg) {
+		std::cout << "recv msg: " << msg << std::endl;
+	}
+
 	// create only through listener::create
-	listener(net::io_context &ioc, net::ip::tcp::acceptor &&acc)
-		: m_ioc(ioc), m_acceptor(std::forward<net::ip::tcp::acceptor>(acc))
+	listener(
+			net::io_context &ioc,
+			net::ip::tcp::acceptor &&acc)
+		:
+			m_ioc(ioc),
+			m_acceptor(std::forward<net::ip::tcp::acceptor>(acc))
 	{}
 public:
-	static std::shared_ptr<listener> create(net::io_context &ioc, net::ip::tcp::acceptor &&acc) {
-		return std::make_shared<listener>(listener(ioc, std::forward<net::ip::tcp::acceptor>(acc)));
+	static std::shared_ptr<listener> create(
+			net::io_context &ioc,
+			net::ip::tcp::acceptor &&acc) {
+		return std::make_shared<listener>(
+				listener(
+					ioc,
+					std::forward<net::ip::tcp::acceptor>(acc)));
 	}
 
 	void run() {
