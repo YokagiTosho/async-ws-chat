@@ -16,18 +16,21 @@ namespace net = boost::asio;
 
 class session;
 
-using msg_notify_callback = std::function<void(const std::string &)>;
-
 using on_connect_t = std::function<void(std::shared_ptr<session>)>;
 using on_disconnect_t = std::function<void(size_t)>;
 using on_message_t = std::function<void(const std::string &)>;
 using on_error_t = std::function<void(const boost::system::error_code &)>;
+
+// int as a key is temporary solution, TODO change later
+using sessions_t = std::unordered_map<int, std::shared_ptr<session>>;
 
 class session: public std::enable_shared_from_this<session> {
 private:
 	beast::websocket::stream<beast::tcp_stream> m_ws;
 	beast::flat_buffer m_buf;
 	size_t m_id { 0 };
+	size_t read_errors { 0 };
+	const size_t errors_threshold { 3 };
 
 	session(size_t id, net::ip::tcp::socket &&sock)
 		: m_id(id), m_ws(std::move(sock))
@@ -68,8 +71,7 @@ private:
 			const beast::error_code &ec,
 			std::size_t bytes_transferred)
 	{
-		if(ec == websocket::error::closed) {
-			// client closed session
+		if (ec == websocket::error::closed) {
 			std::cout << "Client closed connection" << std::endl;
 			on_disconnect(m_id);
 			return;
@@ -78,15 +80,24 @@ private:
 		if (ec) {
 			// some other error occured
 			std::cerr << "Error occured in 'session::on_read': " << ec.what() << std::endl;
+			
+			if (read_errors >= errors_threshold) {
+				return;
+			}
+
+			read_errors++;
+			
 			do_read();
+
 			return;
 		}
 
 		auto s = beast::buffers_to_string(m_buf.cdata());
 
+		m_buf.consume(m_buf.size());
+
 		on_message(s);
 
-		m_buf.consume(m_buf.size());
 
 		do_read();
 	}
@@ -121,16 +132,14 @@ public:
 		
 		m_ws.async_write(
 				buf,
-				beast::bind_front_handler(&session::on_write, this));
+				beast::bind_front_handler(&session::on_write, shared_from_this()));
 	}
 
 	const size_t id() const {
-		return m_id;
+		return m_ws.next_lay
+		//return m_id;
 	}
-
 };
 
-// int as a key is temporary solution, TODO change later
-using sessions_t = std::unordered_map<int, std::shared_ptr<session>>;
 
 #endif

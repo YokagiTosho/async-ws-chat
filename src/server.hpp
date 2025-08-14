@@ -1,5 +1,5 @@
-#ifndef LISTENER_HPP
-#define LISTENER_HPP
+#ifndef SERVER_HPP
+#define SERVER_HPP
 
 #include <iostream>
 
@@ -24,7 +24,7 @@ private:
 	void do_accept() {
 		m_acceptor.async_accept(
 				beast::bind_front_handler(
-					&listener::on_accept,
+					&server::on_accept,
 					shared_from_this()
 					)
 				);
@@ -32,14 +32,15 @@ private:
 
 	void on_accept(const boost::system::error_code& error, net::ip::tcp::socket sock) {
 		if (error) {
-			std::cerr << "err occured in 'listener::on_accept': " << error.what() << std::endl;
+			std::cerr << "err occured in 'server::on_accept': " << error.what() << std::endl;
 
 			do_accept();
 
 			return;
 		}
 
-		auto s= session::create(
+
+		auto s = session::create(
 				m_id,
 				std::move(sock));
 
@@ -60,7 +61,6 @@ private:
 		s->on_disconnect = [this](size_t id) {
 			m_sessions.erase(id);
 		};
-
 		
 		m_id++;
 
@@ -69,17 +69,11 @@ private:
 		do_accept();
 	}
 
-	void on_notify_message(const std::string &msg) {
-		std::cout << "recv msg: " << msg << std::endl;
-	}
-
-	// create only through listener::create
+	// create only through server::create
 	server(
 			net::io_context &ioc,
 			net::ip::tcp::acceptor &&acc)
-		:
-			m_ioc(ioc),
-			m_acceptor(std::forward<net::ip::tcp::acceptor>(acc))
+		: m_ioc(ioc), m_acceptor(std::forward<net::ip::tcp::acceptor>(acc))
 	{}
 public:
 	static std::shared_ptr<server> create(
@@ -88,7 +82,9 @@ public:
 		return std::make_shared<server>(
 				server(
 					ioc,
-					std::forward<net::ip::tcp::acceptor>(acc)));
+					std::forward<net::ip::tcp::acceptor>(acc)
+					)
+				);
 	}
 
 	void run() {
