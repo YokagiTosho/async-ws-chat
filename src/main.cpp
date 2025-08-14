@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
 
 		acceptor.listen(backlog);
 
-		listener::create(ioc, std::move(acceptor))->run();
+		server::create(ioc, std::move(acceptor))->run();
 
 		ioc.run();
 	} catch (const boost::system::system_error &e) {

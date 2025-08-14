@@ -14,7 +14,7 @@
 namespace beast = boost::beast;
 namespace net = boost::asio;
 
-class listener : public std::enable_shared_from_this<listener> {
+class server : public std::enable_shared_from_this<server> {
 private:
 	net::io_context &m_ioc;
 	net::ip::tcp::acceptor m_acceptor;
@@ -74,7 +74,7 @@ private:
 	}
 
 	// create only through listener::create
-	listener(
+	server(
 			net::io_context &ioc,
 			net::ip::tcp::acceptor &&acc)
 		:
@@ -82,11 +82,11 @@ private:
 			m_acceptor(std::forward<net::ip::tcp::acceptor>(acc))
 	{}
 public:
-	static std::shared_ptr<listener> create(
+	static std::shared_ptr<server> create(
 			net::io_context &ioc,
 			net::ip::tcp::acceptor &&acc) {
-		return std::make_shared<listener>(
-				listener(
+		return std::make_shared<server>(
+				server(
 					ioc,
 					std::forward<net::ip::tcp::acceptor>(acc)));
 	}
