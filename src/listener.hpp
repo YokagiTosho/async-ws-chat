@@ -41,17 +41,30 @@ private:
 
 		auto s= session::create(
 				m_id,
-				std::move(sock),
-				[this](const std::string &msg) {
-					for (auto &[key, session] : m_sessions) {
-						session->do_write(msg);
-					}
-				});
-				//std::bind(&listener::on_notify_message, this, std::placeholders::_1));
-		s->run();
+				std::move(sock));
 
-		m_sessions[m_id] = s;
+		s->on_message = [this](const std::string &msg) {
+			for (auto &[key, session] : m_sessions) {
+				session->do_write(msg);
+			}
+		};
+
+		s->on_connect = [this](std::shared_ptr<session> s) {
+			m_sessions[s->id()] = s;
+		};
+
+		s->on_error = [this](const boost::system::error_code& error) {
+
+		};
+
+		s->on_disconnect = [this](size_t id) {
+			m_sessions.erase(id);
+		};
+
+		
 		m_id++;
+
+		s->run();
 
 		do_accept();
 	}

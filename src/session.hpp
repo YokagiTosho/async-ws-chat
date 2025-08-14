@@ -14,18 +14,24 @@ namespace beast = boost::beast;
 namespace websocket = beast::websocket;
 namespace net = boost::asio;
 
+class session;
+
 using msg_notify_callback = std::function<void(const std::string &)>;
+
+using on_connect_t = std::function<void(std::shared_ptr<session>)>;
+using on_disconnect_t = std::function<void(size_t)>;
+using on_message_t = std::function<void(const std::string &)>;
+using on_error_t = std::function<void(const boost::system::error_code &)>;
 
 class session: public std::enable_shared_from_this<session> {
 private:
 	beast::websocket::stream<beast::tcp_stream> m_ws;
 	beast::flat_buffer m_buf;
 	size_t m_id { 0 };
-	msg_notify_callback m_notify;
 
-	session(size_t id, net::ip::tcp::socket &&sock, msg_notify_callback notify)
+	session(size_t id, net::ip::tcp::socket &&sock)
 		: m_id(id), m_ws(std::move(sock))
-	{ m_notify = notify; }
+	{}
 
 	void socket_upgrade() {
 		m_ws.async_accept(
@@ -43,6 +49,8 @@ private:
 		}
 
 		std::cout << "Successfully accepted websocket" << std::endl;
+
+		on_connect(shared_from_this());
 
 		do_read();
 	}
@@ -63,6 +71,7 @@ private:
 		if(ec == websocket::error::closed) {
 			// client closed session
 			std::cout << "Client closed connection" << std::endl;
+			on_disconnect(m_id);
 			return;
 		}
 
@@ -75,7 +84,7 @@ private:
 
 		auto s = beast::buffers_to_string(m_buf.cdata());
 
-		m_notify(s);
+		on_message(s);
 
 		m_buf.consume(m_buf.size());
 
@@ -90,11 +99,15 @@ private:
 		std::cout << "Successfully written " << bytes_transferred << " bytes" << std::endl;
 	}
 public:
-	static std::shared_ptr<session> create(size_t id, net::ip::tcp::socket &&sock, msg_notify_callback notify) {
+	on_connect_t on_connect;
+	on_disconnect_t on_disconnect;
+	on_message_t on_message;
+	on_error_t on_error;
+
+	static std::shared_ptr<session> create(size_t id, net::ip::tcp::socket &&sock) {
 		return std::make_shared<session>(session(
 					id,
-					std::forward<net::ip::tcp::socket>(sock),
-					notify));
+					std::forward<net::ip::tcp::socket>(sock)));
 	}
 
 	void run() {
@@ -110,6 +123,11 @@ public:
 				buf,
 				beast::bind_front_handler(&session::on_write, this));
 	}
+
+	const size_t id() const {
+		return m_id;
+	}
+
 };
 
 // int as a key is temporary solution, TODO change later
