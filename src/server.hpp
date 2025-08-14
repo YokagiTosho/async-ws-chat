@@ -10,6 +10,7 @@
 #include <boost/beast/websocket.hpp>
 
 #include "session.hpp"
+#include "sessions_manager.hpp"
 
 namespace beast = boost::beast;
 namespace net = boost::asio;
@@ -18,8 +19,7 @@ class server : public std::enable_shared_from_this<server> {
 private:
 	net::io_context &m_ioc;
 	net::ip::tcp::acceptor m_acceptor;
-	size_t m_id {0};
-	sessions_t m_sessions;
+	sessions_manager m_sm;
 	
 	void do_accept() {
 		m_acceptor.async_accept(
@@ -33,36 +33,28 @@ private:
 	void on_accept(const boost::system::error_code& error, net::ip::tcp::socket sock) {
 		if (error) {
 			std::cerr << "err occured in 'server::on_accept': " << error.what() << std::endl;
-
 			do_accept();
-
 			return;
 		}
 
-
 		auto s = session::create(
-				m_id,
 				std::move(sock));
 
 		s->on_message = [this](const std::string &msg) {
-			for (auto &[key, session] : m_sessions) {
-				session->do_write(msg);
-			}
+			m_sm.broadcast(msg);
 		};
 
 		s->on_connect = [this](std::shared_ptr<session> s) {
-			m_sessions[s->id()] = s;
+			m_sm.add(s);
+		};
+
+		s->on_disconnect = [this](auto s) {
+			m_sm.remove(s);
 		};
 
 		s->on_error = [this](const boost::system::error_code& error) {
-
+			std::cerr << "All occured in session: " << error.what() << std::endl;
 		};
-
-		s->on_disconnect = [this](size_t id) {
-			m_sessions.erase(id);
-		};
-		
-		m_id++;
 
 		s->run();
 
@@ -75,6 +67,7 @@ private:
 			net::ip::tcp::acceptor &&acc)
 		: m_ioc(ioc), m_acceptor(std::forward<net::ip::tcp::acceptor>(acc))
 	{}
+
 public:
 	static std::shared_ptr<server> create(
 			net::io_context &ioc,
@@ -91,6 +84,5 @@ public:
 		do_accept();
 	}
 };
-
 
 #endif
