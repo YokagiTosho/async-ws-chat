@@ -28,8 +28,6 @@ class session: public std::enable_shared_from_this<session> {
 private:
 	beast::websocket::stream<beast::tcp_stream> m_ws;
 	beast::flat_buffer m_buf;
-	size_t read_errors { 0 };
-	const size_t errors_threshold { 3 };
 
 	session(net::ip::tcp::socket &&sock)
 		: m_ws(std::move(sock))
@@ -76,6 +74,7 @@ private:
 	}
 
 	void on_close_socket(const beast::error_code &error) {
+		std::cout << "and here?" << std::endl;
 		if (error && error != beast::websocket::error::closed) {
 			std::cerr
 				<< "Error occured in 'session::on_close_socket': "
@@ -84,17 +83,29 @@ private:
 		}
 	}
 
-	void close_and_disconnect_socket(beast::websocket::close_reason const &cr) {
-		on_disconnect(shared_from_this());
-		close_socket(cr);
-	}
-
 	void on_read(
 			const beast::error_code &ec,
 			std::size_t bytes_transferred)
 	{
+		// TODO move to single if statement, now for debug purposes
+		if (ec == boost::asio::error::eof) {
+			std::cout << "eof 'session::on_read'" << std::endl;
+			on_disconnect(shared_from_this());
+			return;
+		}
+		if (ec == boost::asio::error::not_connected) {
+			std::cout << "not_connected 'session::on_read'" << std::endl;
+			on_disconnect(shared_from_this());
+			return;
+		}
 		if (ec == websocket::error::closed) {
 			std::cout << "Client closed connection" << std::endl;
+			on_disconnect(shared_from_this());
+			return;
+		}
+
+		if (ec == boost::asio::error::operation_aborted) {
+			std::cout << "Operation aborted 'session::on_read'" << std::endl;
 			on_disconnect(shared_from_this());
 			return;
 		}
@@ -104,20 +115,7 @@ private:
 				<< "Error occured in 'session::on_read': "
 				<< ec.what()
 				<< std::endl;
-
-			if (read_errors >= errors_threshold) {
-				std::cerr
-					<< "Threshold limit reached in 'session::on_read': "
-					<< ec.what()
-					<< std::endl;
-				on_disconnect(shared_from_this());
-				return;
-			}
-
-			read_errors++;
-			
-			do_read();
-
+			on_disconnect(shared_from_this());
 			return;
 		}
 
@@ -133,9 +131,10 @@ private:
 	void on_write(const boost::system::error_code& error, std::size_t bytes_transferred) {
 		if (error) {
 			std::cerr << "Error occured in 'session::on_write': " << error.what() << std::endl;
+			on_disconnect(shared_from_this());
 			return;
 		}
-		std::cout << "Successfully written " << bytes_transferred << " bytes" << std::endl;
+		std::cout << "Written: " << bytes_transferred << " bytes" << std::endl;
 	}
 public:
 	on_connect_t on_connect;
@@ -153,13 +152,15 @@ public:
 	}
 
 	void do_write(const std::string &s) {
-		std::cout << "send msg: " << s << std::endl;
-		
-		auto buf = boost::asio::buffer(s);
-		
+		boost::asio::const_buffer buf = boost::asio::buffer(s);
+
 		m_ws.async_write(
 				buf,
 				beast::bind_front_handler(&session::on_write, shared_from_this()));
+	}
+
+	void close() {
+		close_socket(boost::beast::websocket::normal);
 	}
 };
 

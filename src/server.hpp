@@ -31,8 +31,13 @@ private:
 	}
 
 	void on_accept(const boost::system::error_code& error, net::ip::tcp::socket sock) {
+		if (error == net::error::operation_aborted) {
+			m_acceptor.close();
+			return;
+		}
+
 		if (error) {
-			std::cerr << "err occured in 'server::on_accept': " << error.what() << std::endl;
+			std::cerr << "Error occured in 'server::on_accept': " << error.what() << std::endl;
 			do_accept();
 			return;
 		}
@@ -53,7 +58,7 @@ private:
 		};
 
 		s->on_error = [this](const boost::system::error_code& error) {
-			std::cerr << "All occured in session: " << error.what() << std::endl;
+			std::cerr << "Error occured in session: " << error.what() << std::endl;
 		};
 
 		s->run();
@@ -82,6 +87,13 @@ public:
 
 	void run() {
 		do_accept();
+	}
+
+	void stop() {
+		m_acceptor.cancel();
+		m_acceptor.close();
+
+		m_sm.close_sessions();
 	}
 };
 
