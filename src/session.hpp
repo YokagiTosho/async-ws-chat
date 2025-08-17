@@ -87,25 +87,11 @@ private:
 			const beast::error_code &ec,
 			std::size_t bytes_transferred)
 	{
-		// TODO move to single if statement, now for debug purposes
-		if (ec == boost::asio::error::eof) {
-			std::cout << "eof 'session::on_read'" << std::endl;
-			on_disconnect(shared_from_this());
-			return;
-		}
-		if (ec == boost::asio::error::not_connected) {
-			std::cout << "not_connected 'session::on_read'" << std::endl;
-			on_disconnect(shared_from_this());
-			return;
-		}
-		if (ec == websocket::error::closed) {
-			std::cout << "Client closed connection" << std::endl;
-			on_disconnect(shared_from_this());
-			return;
-		}
-
-		if (ec == boost::asio::error::operation_aborted) {
-			std::cout << "Operation aborted 'session::on_read'" << std::endl;
+		if (ec == boost::asio::error::eof ||
+				ec == boost::asio::error::not_connected ||
+				ec == websocket::error::closed ||
+				ec == boost::asio::error::operation_aborted) {
+			std::cout << "Session closed" << std::endl;
 			on_disconnect(shared_from_this());
 			return;
 		}
