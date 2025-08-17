@@ -4,15 +4,7 @@
 #include <iostream>
 #include <functional>
 
-#include <boost/asio.hpp>
-#include <boost/asio/ip/tcp.hpp>
-
-#include <boost/beast/core.hpp>
-#include <boost/beast/websocket.hpp>
-
-namespace beast = boost::beast;
-namespace websocket = beast::websocket;
-namespace net = boost::asio;
+#include "net.hpp"
 
 class session;
 
@@ -29,7 +21,7 @@ private:
 	beast::websocket::stream<beast::tcp_stream> m_ws;
 	beast::flat_buffer m_buf;
 
-	session(net::ip::tcp::socket &&sock)
+	session(asio::ip::tcp::socket &&sock)
 		: m_ws(std::move(sock))
 	{}
 
@@ -74,7 +66,6 @@ private:
 	}
 
 	void on_close_socket(const beast::error_code &error) {
-		std::cout << "and here?" << std::endl;
 		if (error && error != beast::websocket::error::closed) {
 			std::cerr
 				<< "Error occured in 'session::on_close_socket': "
@@ -87,10 +78,10 @@ private:
 			const beast::error_code &ec,
 			std::size_t bytes_transferred)
 	{
-		if (ec == boost::asio::error::eof ||
-				ec == boost::asio::error::not_connected ||
+		if (ec == asio::error::eof ||
+				ec == asio::error::not_connected ||
 				ec == websocket::error::closed ||
-				ec == boost::asio::error::operation_aborted) {
+				ec == asio::error::operation_aborted) {
 			std::cout << "Session closed" << std::endl;
 			on_disconnect(shared_from_this());
 			return;
@@ -128,9 +119,9 @@ public:
 	on_message_t on_message;
 	on_error_t on_error;
 
-	static std::shared_ptr<session> create(net::ip::tcp::socket &&sock) {
+	static std::shared_ptr<session> create(asio::ip::tcp::socket &&sock) {
 		return std::make_shared<session>(session(
-					std::forward<net::ip::tcp::socket>(sock)));
+					std::forward<asio::ip::tcp::socket>(sock)));
 	}
 
 	void run() {
@@ -138,7 +129,7 @@ public:
 	}
 
 	void do_write(const std::string &s) {
-		boost::asio::const_buffer buf = boost::asio::buffer(s);
+		asio::const_buffer buf = asio::buffer(s);
 
 		m_ws.async_write(
 				buf,
@@ -146,7 +137,7 @@ public:
 	}
 
 	void close() {
-		close_socket(boost::beast::websocket::normal);
+		close_socket(beast::websocket::normal);
 	}
 };
 

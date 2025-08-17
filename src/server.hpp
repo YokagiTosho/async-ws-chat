@@ -3,22 +3,14 @@
 
 #include <iostream>
 
-#include <boost/asio.hpp>
-#include <boost/asio/ip/tcp.hpp>
-
-#include <boost/beast/core.hpp>
-#include <boost/beast/websocket.hpp>
 
 #include "session.hpp"
 #include "sessions_manager.hpp"
 
-namespace beast = boost::beast;
-namespace net = boost::asio;
-
 class server : public std::enable_shared_from_this<server> {
 private:
-	net::io_context &m_ioc;
-	net::ip::tcp::acceptor m_acceptor;
+	asio::io_context &m_ioc;
+	asio::ip::tcp::acceptor m_acceptor;
 	sessions_manager m_sm;
 	
 	void do_accept() {
@@ -30,8 +22,8 @@ private:
 				);
 	}
 
-	void on_accept(const boost::system::error_code& error, net::ip::tcp::socket sock) {
-		if (error == net::error::operation_aborted) {
+	void on_accept(const boost::system::error_code& error, asio::ip::tcp::socket sock) {
+		if (error == asio::error::operation_aborted) {
 			m_acceptor.close();
 			return;
 		}
@@ -68,19 +60,19 @@ private:
 
 	// create only through server::create
 	server(
-			net::io_context &ioc,
-			net::ip::tcp::acceptor &&acc)
-		: m_ioc(ioc), m_acceptor(std::forward<net::ip::tcp::acceptor>(acc))
+			asio::io_context &ioc,
+			asio::ip::tcp::acceptor &&acc)
+		: m_ioc(ioc), m_acceptor(std::forward<asio::ip::tcp::acceptor>(acc))
 	{}
 
 public:
 	static std::shared_ptr<server> create(
-			net::io_context &ioc,
-			net::ip::tcp::acceptor &&acc) {
+			asio::io_context &ioc,
+			asio::ip::tcp::acceptor &&acc) {
 		return std::make_shared<server>(
 				server(
 					ioc,
-					std::forward<net::ip::tcp::acceptor>(acc)
+					std::forward<asio::ip::tcp::acceptor>(acc)
 					)
 				);
 	}

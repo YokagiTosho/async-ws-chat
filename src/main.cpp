@@ -1,14 +1,15 @@
+#include "net.hpp"
 #include "server.hpp"
 
 int main(int argc, char **argv) {
 
-	net::io_context ioc{1};
+	asio::io_context ioc{1};
 
 	try {
-		net::ip::tcp::endpoint ep{net::ip::make_address("127.0.0.1"), 8080};
+		asio::ip::tcp::endpoint ep{asio::ip::make_address("127.0.0.1"), 8080};
 
 
-		net::ip::tcp::acceptor acceptor{ioc, ep};
+		asio::ip::tcp::acceptor acceptor{ioc, ep};
 
 		constexpr int backlog = 30;
 
