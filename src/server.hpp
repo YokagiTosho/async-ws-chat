@@ -12,6 +12,7 @@ private:
 	asio::io_context &m_ioc;
 	asio::ip::tcp::acceptor m_acceptor;
 	sessions_manager m_sm;
+	bool m_shutting_down { false };
 	
 	void do_accept() {
 		m_acceptor.async_accept(
@@ -46,7 +47,8 @@ private:
 		};
 
 		s->on_disconnect = [this](auto s) {
-			m_sm.remove(s);
+			if (!m_shutting_down)
+				m_sm.remove(s);
 		};
 
 		s->on_error = [this](const boost::system::error_code& error) {
@@ -84,6 +86,8 @@ public:
 	void stop() {
 		m_acceptor.cancel();
 		m_acceptor.close();
+
+		m_shutting_down = true;
 
 		m_sm.close_sessions();
 	}

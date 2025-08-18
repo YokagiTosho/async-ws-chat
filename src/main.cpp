@@ -6,7 +6,10 @@ int main(int argc, char **argv) {
 	asio::io_context ioc{1};
 
 	try {
-		asio::ip::tcp::endpoint ep{asio::ip::make_address("127.0.0.1"), 8080};
+		asio::ip::tcp::endpoint ep{
+			asio::ip::make_address("127.0.0.1"),
+				8080
+		};
 
 
 		asio::ip::tcp::acceptor acceptor{ioc, ep};
@@ -28,7 +31,11 @@ int main(int argc, char **argv) {
 					<< error.what()
 					<< std::endl;
 				}
-				s->stop();
+
+				if (signal_number == SIGINT || signal_number == SIGTERM) {
+					s->stop();
+				}
+
 				});
 
 		ioc.run();

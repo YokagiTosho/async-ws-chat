@@ -69,13 +69,10 @@ public:
 	}
 
 	void close_sessions() {
-		// on session closed 'sessions_manager::remove' will be invoked whill 
-		// will erase element, but its done sequentially so should be safe
-		// in very rare cases a client can disconnect while closing server
-		// so may throw
 		for (auto &s: m_sessions) {
 			s->close();
 		}
+		m_sessions.clear();
 	}
 
 private:
