@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "net.hpp"
+#include "debug.hpp"
 
 class session;
 
@@ -12,9 +13,6 @@ using on_connect_t = std::function<void(std::shared_ptr<session>)>;
 using on_disconnect_t = std::function<void(std::shared_ptr<session>)>;
 using on_message_t = std::function<void(const std::string &)>;
 using on_error_t = std::function<void(const boost::system::error_code &)>;
-
-// int as a key is temporary solution, TODO change later
-using sessions_t = std::unordered_map<int, std::shared_ptr<session>>;
 
 class session: public std::enable_shared_from_this<session> {
 private:
@@ -40,38 +38,20 @@ private:
 			return;
 		}
 
-		std::cout << "Successfully accepted websocket" << std::endl;
+		__debug("Successfully accepted websocket");
 
 		on_connect(shared_from_this());
 
-		do_read();
+		read();
 	}
 
-	void do_read() {
+	void read() {
 		m_ws.async_read(m_buf,
 				beast::bind_front_handler(
 					&session::on_read,
 					shared_from_this()
 					)
 				);
-	}
-
-	void close_socket(beast::websocket::close_reason const &cr) {
-		m_ws.async_close(
-				cr,
-				beast::bind_front_handler(
-					&session::on_close_socket, shared_from_this()
-					)
-				);
-	}
-
-	void on_close_socket(const beast::error_code &error) {
-		if (error && error != beast::websocket::error::closed) {
-			std::cerr
-				<< "Error occured in 'session::on_close_socket': "
-				<< error.what()
-				<< std::endl;
-		}
 	}
 
 	void on_read(
@@ -82,7 +62,7 @@ private:
 				ec == asio::error::not_connected ||
 				ec == websocket::error::closed ||
 				ec == asio::error::operation_aborted) {
-			std::cout << "Session closed" << std::endl;
+			__debug("Session closed");
 			on_disconnect(shared_from_this());
 			return;
 		}
@@ -102,7 +82,7 @@ private:
 
 		on_message(s);
 
-		do_read();
+		read();
 	}
 
 	void on_write(const boost::system::error_code& error, std::size_t bytes_transferred) {
@@ -111,7 +91,26 @@ private:
 			on_disconnect(shared_from_this());
 			return;
 		}
-		std::cout << "Written: " << bytes_transferred << " bytes" << std::endl;
+
+		__debug("Written:", bytes_transferred, "bytes");
+	}
+
+	void close_socket(beast::websocket::close_reason const &cr) {
+		m_ws.async_close(
+				cr,
+				beast::bind_front_handler(
+					&session::on_close_socket, shared_from_this()
+					)
+				);
+	}
+
+	void on_close_socket(const beast::error_code &error) {
+		if (error && error != beast::websocket::error::closed) {
+			std::cerr
+				<< "Error occured in 'session::on_close_socket': "
+				<< error.what()
+				<< std::endl;
+		}
 	}
 public:
 	on_connect_t on_connect;
@@ -128,7 +127,7 @@ public:
 		socket_upgrade();
 	}
 
-	void do_write(const std::string &s) {
+	void write(const std::string &s) {
 		asio::const_buffer buf = asio::buffer(s);
 
 		m_ws.async_write(

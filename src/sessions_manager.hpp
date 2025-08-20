@@ -2,36 +2,41 @@
 #define SESSIONS_BROADCAST_HPP
 
 #include "session.hpp"
-
-#include <unordered_set>
-#include <algorithm>
+#include "debug.hpp"
 
 #define USE_UNORDERED_SET
-#undef USE_UNORDERED_SET
+
+//#undef USE_UNORDERED_SET
+
+#if defined(USE_UNORDERED_SET)
+#include <unordered_set>
+#else
+#include <algorithm>
+#endif
 
 class sessions_manager {
 public:
-#ifdef USE_UNORDERED_SET
-	void add(std::shared_ptr<session> s) {
+#if defined(USE_UNORDERED_SET)
+	void add(std::shared_ptr<session> &s) {
 		m_sessions.insert(s);
 	}
 
-	void remove(std::shared_ptr<session> session) {
+	void remove(const std::shared_ptr<session> &session) {
 		if (auto it = m_sessions.find(session); it != m_sessions.end()) {
 			m_sessions.erase(session);
-			std::cout << "Removed session" << std::endl;
+			__debug("Removed session");
 		}
 	}
 #else
-	void add(std::shared_ptr<session> s) {
+	void add(std::shared_ptr<session> &s) {
 		m_sessions.push_back(s);
 	}
 
-	void remove(std::shared_ptr<session> session) {
+	void remove(const std::shared_ptr<session> &session) {
 		auto n = std::find(m_sessions.begin(), m_sessions.end(), session);
 		if (n != m_sessions.end()) {
 			m_sessions.erase(n);
-			std::cout << "Removed session" << std::endl;
+			__debug("Removed session");
 		}
 	}
 #endif
@@ -58,13 +63,14 @@ public:
 		return m_sessions.cend();
 	}
 
-	void print_size() const {
-		std::cout << "Count: " << m_sessions.size() << std::endl;
+	auto size() const {
+		return m_sessions.size();
+
 	}
 
 	void broadcast(const std::string &msg) {
 			for (auto session: m_sessions) {
-				session->do_write(msg);
+				session->write(msg);
 			}
 	}
 
@@ -73,15 +79,15 @@ public:
 			s->close();
 		}
 		m_sessions.clear();
+		__debug("Closed sessions");
 	}
 
 private:
-#ifdef USE_UNORDERED_SET
+#if defined(USE_UNORDERED_SET)
 	std::unordered_set<std::shared_ptr<session>> m_sessions;
 #else
 	std::vector<std::shared_ptr<session>> m_sessions;
 #endif
 };
-
 
 #endif

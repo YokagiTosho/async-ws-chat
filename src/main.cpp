@@ -1,5 +1,6 @@
 #include "net.hpp"
 #include "server.hpp"
+#include "debug.hpp"
 
 int main(int argc, char **argv) {
 
@@ -17,6 +18,8 @@ int main(int argc, char **argv) {
 		constexpr int backlog = 30;
 
 		acceptor.listen(backlog);
+
+		__debug("Listening", ep);
 
 		auto s = server::create(ioc, std::move(acceptor));
 		s->run();
