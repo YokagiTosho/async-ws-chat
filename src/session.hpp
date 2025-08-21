@@ -129,7 +129,6 @@ public:
 
 	void write(const std::string &s) {
 		asio::const_buffer buf = asio::buffer(s);
-
 		m_ws.async_write(
 				buf,
 				beast::bind_front_handler(&session::on_write, shared_from_this()));
