@@ -35,14 +35,14 @@ private:
 		if (error == asio::error::operation_aborted) {
 			m_acceptor.close();
 			return;
-		} else {
+		} else if (error) {
 			std::cerr << "Error occured in 'server::on_accept': " << error.what() << std::endl;
 			do_accept();
 			return;
 
         }
 
-		auto s = session::create(std::move(sock));
+		auto s = plain_session::create(std::move(sock));
 
 		s->on_message = [this](const std::string &msg) {
 			m_sm.broadcast(msg);
@@ -52,7 +52,7 @@ private:
 			m_sm.add(s);
 		};
 
-		s->on_disconnect = [this](auto s) {
+		s->on_disconnect = [this](std::shared_ptr<session> s) {
 			if (!m_shutting_down)
 				m_sm.remove(s);
 		};

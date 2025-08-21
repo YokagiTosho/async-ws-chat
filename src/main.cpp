@@ -6,12 +6,12 @@ int main(int argc, char **argv) {
 	asio::io_context ioc{1};
 
 	try {
-		asio::ip::tcp::endpoint ep{
-			asio::ip::make_address("127.0.0.1"),
-			8080
-		};
 
-		auto s = server::create(ioc, ep);
+		auto s = server::create(ioc, asio::ip::tcp::endpoint {
+				asio::ip::make_address("127.0.0.1"),
+				8080
+			});
+
 		s->run();
 
 		boost::asio::signal_set signals{ioc, SIGINT};

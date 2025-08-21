@@ -15,22 +15,8 @@ using on_message_t = std::function<void(const std::string &)>;
 using on_error_t = std::function<void(const boost::system::error_code &)>;
 
 class session: public std::enable_shared_from_this<session> {
-private:
-	beast::websocket::stream<beast::tcp_stream> m_ws;
-	beast::flat_buffer m_buf;
-
-	session(asio::ip::tcp::socket &&sock)
-		: m_ws(std::move(sock))
-	{}
-
-	void socket_upgrade() {
-		m_ws.async_accept(
-				beast::bind_front_handler(
-					&session::on_socket_upgrade,
-					shared_from_this()
-					)
-				);
-	}
+protected:
+	session() = default;
 
 	void on_socket_upgrade(const beast::error_code &ec) {
 		if (ec) {
@@ -43,15 +29,6 @@ private:
 		on_connect(shared_from_this());
 
 		read();
-	}
-
-	void read() {
-		m_ws.async_read(m_buf,
-				beast::bind_front_handler(
-					&session::on_read,
-					shared_from_this()
-					)
-				);
 	}
 
 	void on_read(
@@ -95,15 +72,6 @@ private:
 		__debug("Written:", bytes_transferred, "bytes");
 	}
 
-	void close_socket(beast::websocket::close_reason const &cr) {
-		m_ws.async_close(
-				cr,
-				beast::bind_front_handler(
-					&session::on_close_socket, shared_from_this()
-					)
-				);
-	}
-
 	void on_close_socket(const beast::error_code &error) {
 		if (error && error != beast::websocket::error::closed) {
 			std::cerr
@@ -112,31 +80,71 @@ private:
 				<< std::endl;
 		}
 	}
+protected:
+	beast::flat_buffer m_buf;
+
+	virtual void close_socket(beast::websocket::close_reason const &cr) = 0;
+	virtual void read() = 0;
+	virtual void socket_upgrade() = 0;
 public:
 	on_connect_t on_connect;
 	on_disconnect_t on_disconnect;
 	on_message_t on_message;
 	on_error_t on_error;
 
-	static std::shared_ptr<session> create(asio::ip::tcp::socket &&sock) {
-		return std::make_shared<session>(session(
-					std::forward<asio::ip::tcp::socket>(sock)));
-	}
+	virtual void write(const std::string &s) = 0;
 
 	void run() {
 		socket_upgrade();
 	}
 
-	void write(const std::string &s) {
-		asio::const_buffer buf = asio::buffer(s);
-		m_ws.async_write(
-				buf,
-				beast::bind_front_handler(&session::on_write, shared_from_this()));
-	}
-
 	void close() {
 		close_socket(beast::websocket::normal);
 	}
+};
+
+
+class plain_session : public session {
+public:
+	plain_session(asio::ip::tcp::socket &&sock)
+		: m_ws(std::move(sock))
+	{}
+
+	void write(const std::string &s) override {
+		asio::const_buffer buf = asio::buffer(s);
+		m_ws.async_write
+			(buf,
+			 beast::bind_front_handler(&plain_session::on_write, shared_from_this()));
+	}
+
+	static std::shared_ptr<plain_session> create(asio::ip::tcp::socket &&sock) {
+		return std::make_shared<plain_session>
+			(plain_session
+			 (std::forward<asio::ip::tcp::socket>(sock)));
+	}
+protected:
+	void close_socket(beast::websocket::close_reason const &cr) override {
+		m_ws.async_close
+			(cr,
+			 beast::bind_front_handler(&plain_session::on_close_socket, shared_from_this())
+			 );
+	}
+
+	void read() override {
+		m_ws.async_read
+			(m_buf,
+			 beast::bind_front_handler(&plain_session::on_read, shared_from_this())
+			 );
+	}
+
+	void socket_upgrade() override {
+		m_ws.async_accept
+			(beast::bind_front_handler(&plain_session::on_socket_upgrade,shared_from_this())
+			 );
+	}
+
+private:
+	beast::websocket::stream<beast::tcp_stream> m_ws;
 };
 
 #endif
