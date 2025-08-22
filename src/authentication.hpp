@@ -15,7 +15,6 @@ public:
 	void run() {
 		read_request();
 	}
-
 private:
 	void read_request() {
 		http::async_read
@@ -30,8 +29,6 @@ private:
 	void on_read_request(const boost::system::error_code &error, std::size_t bytes_transferred) {
 		if (!beast::websocket::is_upgrade(m_req)) {
 			__debug("Not upgrade request");
-			m_sock.cancel();
-			m_sock.close();
 			return;
 		}
 
@@ -39,8 +36,6 @@ private:
 
 		if (r == m_req.end()) {
 			__debug("Authorization token is not present");
-			m_sock.cancel();
-			m_sock.close();
 			return;
 		}
 
