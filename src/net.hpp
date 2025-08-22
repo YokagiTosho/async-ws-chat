@@ -11,6 +11,7 @@ namespace asio = boost::asio;
 
 namespace beast = boost::beast;
 namespace websocket = beast::websocket;
+namespace http = boost::beast::http;
 
 
 

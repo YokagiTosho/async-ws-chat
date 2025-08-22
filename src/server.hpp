@@ -3,9 +3,9 @@
 
 #include <iostream>
 
-
 #include "session.hpp"
 #include "sessions_manager.hpp"
+#include "authentication.hpp"
 
 class server : public std::enable_shared_from_this<server> {
 private:
@@ -39,38 +39,53 @@ private:
 			std::cerr << "Error occured in 'server::on_accept': " << error.what() << std::endl;
 			do_accept();
 			return;
-
         }
 
-		auto s = plain_session::create(std::move(sock));
+		std::make_shared<authentication>
+			(authentication
+			 (
+			  std::move(sock),
+			  [this](session &s) {
+				  register_callbacks(s);
+			  })
+			 )->run();
 
-		s->on_message = [this](const std::string &msg) {
+		do_accept();
+	}
+
+	void run_session(asio::ip::tcp::socket &&sock) {
+		auto s = plain_session::create(std::forward<asio::ip::tcp::socket>(sock));
+
+		register_callbacks(*s);
+
+		s->run();
+	}
+
+	void register_callbacks(session &s) {
+		s.on_message = [this](const std::string &msg) {
 			m_sm.broadcast(msg);
 		};
 
-		s->on_connect = [this](std::shared_ptr<session> s) {
+		s.on_connect = [this](std::shared_ptr<session> s) {
 			m_sm.add(s);
 		};
 
-		s->on_disconnect = [this](std::shared_ptr<session> s) {
+		s.on_disconnect = [this](std::shared_ptr<session> s) {
 			if (!m_shutting_down)
 				m_sm.remove(s);
 		};
 
-		s->on_error = [this](const boost::system::error_code& error) {
+		s.on_error = [this](const boost::system::error_code& error) {
 			std::cerr << "Error occured in session: " << error.what() << std::endl;
 		};
-
-		s->run();
-
-		do_accept();
 	}
 public:
-
-	static std::shared_ptr<server> create(
-                                          asio::io_context &ioc,
-                                          const asio::ip::tcp::endpoint &ep,
-										  int backlog = 30) {
+	static
+	std::shared_ptr<server>
+	create(asio::io_context &ioc,
+		   const asio::ip::tcp::endpoint &ep,
+		   int backlog = 30)
+	{
 		return std::make_shared<server>(server(ioc, ep, backlog));
 	}
 

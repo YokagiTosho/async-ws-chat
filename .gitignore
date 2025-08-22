@@ -1,2 +1,4 @@
 *~
 build/
+*.py
+__pycache__
