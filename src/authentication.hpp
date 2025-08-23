@@ -1,14 +1,100 @@
 #ifndef AUTHENTICATION_HPP
 #define AUTHENTICATION_HPP
 
+#include <functional>
+#include <stdexcept>
+#include <system_error>
+
+#include "jwt-cpp/jwt.h"
+
 #include "net.hpp"
 #include "session.hpp"
 #include "debug.hpp"
 
-#include "jwt-cpp/jwt.h"
-#include <boost/beast/http/read.hpp>
-#include <boost/beast/http/string_body_fwd.hpp>
-#include <functional>
+class jwt_verifier {
+public:
+	class error {
+	public:
+		enum class code {
+			ok,
+			token_incorrect_format_error,
+			token_verification_error,
+			base64_decode_error,
+		};
+
+		error(code ec = code::ok)
+			: m_ec(ec)
+		{}
+
+		error(const error &) = default;
+
+		error(error &&) = default;
+
+		error &operator=(code ec) {
+			m_ec = ec;
+
+			return *this;
+		}
+
+		explicit operator bool() const
+		{ return m_ec != code::ok; }
+
+		const std::string what() const {
+		    switch (m_ec) {
+			case code::ok: return "ok";
+			case code::token_incorrect_format_error: return "Token incorrect format";
+			case code::token_verification_error: return "Token verification error";
+			case code::base64_decode_error: return "Base64 decode error";
+			}
+
+			return "Undefined error code";
+		}
+
+		code value() {
+			return m_ec;
+		}
+	private:
+		code m_ec;
+	};
+
+	explicit jwt_verifier(const std::string &token)
+		: m_token(token)
+	{}
+
+	bool verify(jwt_verifier::error &ec) {
+		ec = error::code::ok;
+
+		try {
+			auto decoded = jwt::decode(m_token);
+
+			// for (auto& e : decoded.get_payload_json())
+			// 	std::cout << e.first << " = " << e.second << '\n';
+
+			auto verifier = jwt::verify()
+				.allow_algorithm(jwt::algorithm::hs256{"MySecretSecret123"});
+
+			std::error_code _ec;
+			verifier.verify(decoded, _ec);
+
+			if (_ec) {
+				std::cerr << "Failed to verify token: " << _ec.message() << std::endl;
+				ec = error::code::token_verification_error;
+				return false;
+			}
+
+		} catch (const std::invalid_argument &exc) {
+			ec = error::code::token_incorrect_format_error;
+			return false;
+		} catch (const std::runtime_error &exc) {
+			ec = error::code::base64_decode_error;
+			return false;
+		}
+
+		return true;
+	}
+private:
+	const std::string &m_token;
+};
 
 using on_authenticate = std::function<void(session &)>;
 
@@ -81,11 +167,17 @@ private:
 	bool validate_token(const std::string &token) {
 		__debug("Token", token);
 
+		jwt_verifier verifier(token);
 
-		auto decoded = jwt::decode(token);
+		jwt_verifier::error ec;
+		verifier.verify(ec);
 
-		for (auto& e : decoded.get_payload_json())
-			std::cout << e.first << " = " << e.second << '\n';
+		if (ec) {
+			std::cerr << "Could not verify token: " << ec.what() << std::endl;
+		}
+
+		__debug("Successfully verified token");
+
 		return true;
 	}
 
