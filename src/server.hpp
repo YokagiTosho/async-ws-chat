@@ -7,7 +7,9 @@
 #include "sessions_manager.hpp"
 #include "authentication.hpp"
 
-class server : public std::enable_shared_from_this<server> {
+class server
+	: public std::enable_shared_from_this<server>
+{
 private:
 	asio::io_context &m_ioc;
 	asio::ip::tcp::acceptor m_acceptor;
@@ -98,6 +100,7 @@ public:
 	}
 
 	void stop() {
+		// Stop asynchronous operations
 		m_acceptor.cancel();
 		m_acceptor.close();
 

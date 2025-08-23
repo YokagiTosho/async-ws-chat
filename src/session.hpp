@@ -159,7 +159,6 @@ protected:
 				 );
 		}
 	}
-
 private:
 	beast::websocket::stream<beast::tcp_stream> m_ws;
 
