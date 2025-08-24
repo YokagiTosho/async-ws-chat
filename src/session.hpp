@@ -113,10 +113,6 @@ public:
 		: m_ws(std::move(sock))
 	{}
 
-	plain_session(asio::ip::tcp::socket &&sock, std::optional<http::request<http::string_body>> req)
-		: m_ws(std::move(sock)), m_req(req)
-	{}
-
 	void write(const std::string &s) override {
 		asio::const_buffer buf = asio::buffer(s);
 		m_ws.async_write
@@ -126,12 +122,11 @@ public:
 
 	static
 	std::shared_ptr<plain_session>
-	create(asio::ip::tcp::socket &&sock,
-		   std::optional<http::request<http::string_body>> req = {})
+	create(asio::ip::tcp::socket &&sock)
 	{
 		return std::make_shared<plain_session>
 			(plain_session
-			 (std::forward<asio::ip::tcp::socket>(sock), req));
+			 (std::forward<asio::ip::tcp::socket>(sock)));
 	}
 protected:
 	void close_socket(beast::websocket::close_reason const &cr) override {
@@ -149,24 +144,12 @@ protected:
 	}
 
 	void socket_upgrade() override {
-		if (m_req) {
-			m_ws.async_accept
-				(m_req.value(), beast::bind_front_handler(&plain_session::on_socket_upgrade, shared_from_this())
-				 );
-		} else {
-			m_ws.async_accept
-				(beast::bind_front_handler(&plain_session::on_socket_upgrade, shared_from_this())
-				 );
-		}
+		m_ws.async_accept
+			(beast::bind_front_handler(&plain_session::on_socket_upgrade, shared_from_this())
+			 );
 	}
 private:
 	beast::websocket::stream<beast::tcp_stream> m_ws;
-
-	/*
-	  @ if socket was created via authentication middleware, this will contain http::request<http::string_body>
-	  @ otherwise it will not contain value and async_accept should be called without it
-	*/
-	std::optional<http::request<http::string_body>> m_req;
 };
 
 #endif

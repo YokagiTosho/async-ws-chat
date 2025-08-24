@@ -5,7 +5,6 @@
 
 #include "session.hpp"
 #include "sessions_manager.hpp"
-#include "authentication.hpp"
 
 class server
 	: public std::enable_shared_from_this<server>
@@ -43,18 +42,7 @@ private:
 			return;
         }
 
-		/*
-		  @ Run authentication middleware.
-		  @ Because of move should be called last if more middlewares will present
-		 */
-		std::make_shared<authentication>
-			(authentication
-			 (
-			  std::move(sock),
-			  [this](session &s) {
-				  register_callbacks(s);
-			  })
-			 )->run();
+		run_session(std::move(sock));
 
 		do_accept();
 	}
