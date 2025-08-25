@@ -3,10 +3,26 @@
 
 #include <iostream>
 #include <functional>
-#include <optional>
 
 #include "net.hpp"
 #include "debug.hpp"
+#include "proto_parser.hpp"
+
+class message_formatter {
+public:
+	message_formatter()
+	{}
+
+	message_formatter &with_timestamp() {
+
+		return *this;
+	}
+
+	message_formatter &with_name(const std::string &name) {
+
+		return *this;
+	}
+};
 
 class session;
 
@@ -27,49 +43,80 @@ protected:
 
 		__debug("Successfully accepted websocket");
 
-		on_connect(shared_from_this());
-
 		read();
 	}
 
 	void on_read(
-			const beast::error_code &ec,
-			std::size_t bytes_transferred)
+				 const beast::error_code &ec,
+				 std::size_t bytes_transferred)
 	{
-		if (ec == asio::error::eof ||
-				ec == asio::error::not_connected ||
-				ec == websocket::error::closed ||
-				ec == asio::error::operation_aborted) {
-			__debug("Session closed");
+		if (ec && is_disconnected(ec)) {
 			on_disconnect(shared_from_this());
 			return;
 		}
 
-		if (ec) {
-			std::cerr
-				<< "Error occured in 'session::on_read': "
-				<< ec.what()
-				<< std::endl;
+		if (ec && is_unhandled_error(ec)) {
+			std::cerr << "Error occured in 'session::on_read': " << ec.what() << std::endl;
 			on_disconnect(shared_from_this());
 			return;
 		}
 
-		auto s = beast::buffers_to_string(m_buf.cdata());
-
+		std::string s = beast::buffers_to_string(m_buf.cdata());
 		m_buf.consume(m_buf.size());
 
-		on_message(s);
 
+		if (m_parser.get_state() != proto_parser::state::ready) {
+			auto state = m_parser.next_state(s);
+
+			if (state == proto_parser::state::ready) {
+				// parser is ready
+				std::cout << "Nick: " << m_parser.nick() << std::endl;
+				std::cout << "Room: " << m_parser.room() << std::endl;
+
+				on_connect(shared_from_this());
+			}
+			read();
+			return;
+		}
+
+		on_message(nick()+";"+s);
 		read();
 	}
 
-	void on_write(const boost::system::error_code& error, std::size_t bytes_transferred) {
-		if (error) {
-			std::cerr << "Error occured in 'session::on_write': " << error.what() << std::endl;
+	bool is_disconnected(const beast::error_code &ec) {
+		std::cout << ec.what() << " " << ec.value() << std::endl;
+		switch (ec.value()) {
+			/* disconnected */
+		case static_cast<int>(beast::websocket::error::closed):
+		case asio::error::not_connected:
+		case asio::error::eof:
+		case asio::error::operation_aborted:
+			return true;
+		}
+		return false;
+	}
+
+	bool is_unhandled_error(const beast::error_code &ec) {
+		switch (ec.value()) {
+		case boost::system::errc::success:
+		case static_cast<int>(beast::websocket::error::buffer_overflow):
+			return false;
+		default:
+			return true;
+		}
+	}
+
+	void on_write(const boost::system::error_code& ec, std::size_t bytes_transferred) {
+		if (ec && is_disconnected(ec)) {
 			on_disconnect(shared_from_this());
 			return;
 		}
 
+		if (ec && is_unhandled_error(ec)) {
+			std::cerr << "Error occured in 'session::on_write': " << ec.what() << std::endl;
+			on_disconnect(shared_from_this());
+			return;
+		}
 		__debug("Written:", bytes_transferred, "bytes");
 	}
 
@@ -82,7 +129,8 @@ protected:
 		}
 	}
 protected:
-	beast::flat_buffer m_buf;
+	const size_t m_buf_size { 20 };
+	beast::flat_buffer m_buf { m_buf_size };
 
 	virtual void close_socket(beast::websocket::close_reason const &cr) = 0;
 	virtual void read() = 0;
@@ -95,13 +143,15 @@ public:
 
 	virtual void write(const std::string &s) = 0;
 
-	void run() {
-		socket_upgrade();
-	}
+	void run() { socket_upgrade(); }
 
-	void close() {
-		close_socket(beast::websocket::normal);
-	}
+	void close() { close_socket(beast::websocket::normal); }
+
+	const std::string &nick() const { return m_parser.nick(); }
+
+	const std::string &room() const { return m_parser.room(); }
+private:
+	proto_parser m_parser;
 };
 
 
@@ -124,6 +174,7 @@ public:
 	std::shared_ptr<plain_session>
 	create(asio::ip::tcp::socket &&sock)
 	{
+
 		return std::make_shared<plain_session>
 			(plain_session
 			 (std::forward<asio::ip::tcp::socket>(sock)));
@@ -136,9 +187,11 @@ protected:
 			 );
 	}
 
+	// This method is called when websocket handshake succeeds
 	void read() override {
-		m_ws.async_read
+		m_ws.async_read_some
 			(m_buf,
+			 m_buf_size,
 			 beast::bind_front_handler(&plain_session::on_read, shared_from_this())
 			 );
 	}
@@ -150,6 +203,7 @@ protected:
 	}
 private:
 	beast::websocket::stream<beast::tcp_stream> m_ws;
+
 };
 
 #endif
